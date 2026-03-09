@@ -15,10 +15,10 @@ pipeline {
     stages {
 
         stage('Clone Repository') {
-            steps {
-                git 'https://github.com/ganesh-966/blue-green-jenkins-deployment.git'
-            }
-        }
+       steps {
+        git branch: 'main', url: 'https://github.com/ganesh-966/blue-green-jenkins-deployment.git'
+    }
+}
 
         stage('Detect Active Environment') {
             steps {
