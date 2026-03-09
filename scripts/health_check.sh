@@ -6,8 +6,7 @@ echo "Running health check on $SERVER_IP"
 
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://$SERVER_IP)
 
-if [ "$STATUS" == "200" ]
-then
+if [ "$STATUS" == "200" ]; then
     echo "Health Check Passed"
     exit 0
 else

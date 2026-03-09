@@ -24,7 +24,6 @@ pipeline {
         stage('Detect Active Environment') {
             steps {
                 script {
-
                     def listener = sh(
                         script: """
                         aws elbv2 describe-listeners \
@@ -51,13 +50,15 @@ pipeline {
         stage('Deploy Application') {
             steps {
                 script {
-
                     def SERVER = env.TARGET_ENV == "blue" ? env.BLUE_SERVER : env.GREEN_SERVER
 
-                    sh """
-                    chmod +x scripts/deploy.sh
-                    ./scripts/deploy.sh ${SERVER}
-                    """
+                    // Use SSH key stored in Jenkins credentials
+                    sshagent(['ssh-key']) {  // Replace 'ssh-key' with your credential ID
+                        sh """
+                        chmod +x scripts/deploy.sh
+                        ./scripts/deploy.sh ${SERVER}
+                        """
+                    }
 
                     echo "Deployment completed on ${env.TARGET_ENV} server"
                 }
@@ -67,7 +68,6 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-
                     def SERVER = env.TARGET_ENV == "blue" ? env.BLUE_SERVER : env.GREEN_SERVER
 
                     sh """
@@ -83,7 +83,6 @@ pipeline {
         stage('Switch Traffic') {
             steps {
                 script {
-
                     def TARGET_GROUP = env.TARGET_ENV == "blue" ? BLUE_TG : GREEN_TG
 
                     sh """
@@ -98,14 +97,12 @@ pipeline {
     }
 
     post {
-
         success {
             echo "Blue-Green Deployment Successful"
         }
 
         failure {
             script {
-
                 echo "Deployment failed. Initiating rollback..."
 
                 def OLD_TARGET = env.ACTIVE_ENV == "blue" ? BLUE_TG : GREEN_TG
