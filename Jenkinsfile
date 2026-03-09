@@ -3,9 +3,14 @@ pipeline {
 
     environment {
         AWS_REGION = 'ap-southeast-1'
+
         LISTENER_ARN = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:listener/app/application-load-balancer/e0ac9b61afa64029/c5bbfd94b9378fd0'
+
         BLUE_TG = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:targetgroup/blue-target-group/28774fc982eb3590'
         GREEN_TG = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:targetgroup/green-target-group/928a36c922e41275'
+
+        BLUE_SERVER = '54.255.243.8'
+        GREEN_SERVER = '3.0.90.147'
     }
 
     stages {
@@ -45,21 +50,31 @@ pipeline {
 
         stage('Deploy Application') {
             steps {
-                echo "Deploying application to ${env.TARGET_ENV}"
+                script {
 
-                sh '''
-                echo "Application deployed"
-                '''
+                    def SERVER = env.TARGET_ENV == "blue" ? env.BLUE_SERVER : env.GREEN_SERVER
+
+                    sh """
+                    scp -o StrictHostKeyChecking=no index.html ubuntu@${SERVER}:/tmp/
+
+                    ssh -o StrictHostKeyChecking=no ubuntu@${SERVER} '
+                    sudo mv /tmp/index.html /var/www/html/index.html
+                    sudo systemctl restart nginx
+                    '
+                    """
+
+                    echo "Application deployed to ${env.TARGET_ENV}"
+                }
             }
         }
 
         stage('Health Check') {
             steps {
-                echo "Running health checks"
+                echo "Running health check"
 
                 sh '''
                 sleep 10
-                echo "Health check passed"
+                echo Health check passed
                 '''
             }
         }
