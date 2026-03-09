@@ -6,10 +6,10 @@ pipeline {
 
         LISTENER_ARN = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:listener/app/application-load-balancer/e0ac9b61afa64029/c5bbfd94b9378fd0'
 
-        BLUE_TG = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:targetgroup/blue-target-group/28774fc982eb3590'
+        BLUE_TG  = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:targetgroup/blue-target-group/28774fc982eb3590'
         GREEN_TG = 'arn:aws:elasticloadbalancing:ap-southeast-1:265974217143:targetgroup/green-target-group/928a36c922e41275'
 
-        BLUE_SERVER = '54.255.243.8'
+        BLUE_SERVER  = '54.255.243.8'
         GREEN_SERVER = '3.0.90.147'
     }
 
@@ -55,27 +55,28 @@ pipeline {
                     def SERVER = env.TARGET_ENV == "blue" ? env.BLUE_SERVER : env.GREEN_SERVER
 
                     sh """
-                    scp -o StrictHostKeyChecking=no index.html ubuntu@${SERVER}:/tmp/
-
-                    ssh -o StrictHostKeyChecking=no ubuntu@${SERVER} '
-                    sudo mv /tmp/index.html /var/www/html/index.html
-                    sudo systemctl restart nginx
-                    '
+                    chmod +x scripts/deploy.sh
+                    ./scripts/deploy.sh ${SERVER}
                     """
 
-                    echo "Application deployed to ${env.TARGET_ENV}"
+                    echo "Deployment completed on ${env.TARGET_ENV} server"
                 }
             }
         }
 
         stage('Health Check') {
             steps {
-                echo "Running health check"
+                script {
 
-                sh '''
-                sleep 10
-                echo Health check passed
-                '''
+                    def SERVER = env.TARGET_ENV == "blue" ? env.BLUE_SERVER : env.GREEN_SERVER
+
+                    sh """
+                    chmod +x scripts/health_check.sh
+                    ./scripts/health_check.sh ${SERVER}
+                    """
+
+                    echo "Health check successful"
+                }
             }
         }
 
@@ -86,10 +87,8 @@ pipeline {
                     def TARGET_GROUP = env.TARGET_ENV == "blue" ? BLUE_TG : GREEN_TG
 
                     sh """
-                    aws elbv2 modify-listener \
-                    --listener-arn ${LISTENER_ARN} \
-                    --default-actions Type=forward,TargetGroupArn=${TARGET_GROUP} \
-                    --region ${AWS_REGION}
+                    chmod +x scripts/switch_traffic.sh
+                    ./scripts/switch_traffic.sh ${TARGET_GROUP} ${LISTENER_ARN}
                     """
 
                     echo "Traffic switched to ${env.TARGET_ENV}"
@@ -99,12 +98,25 @@ pipeline {
     }
 
     post {
+
         success {
             echo "Blue-Green Deployment Successful"
         }
 
         failure {
-            echo "Pipeline Failed"
+            script {
+
+                echo "Deployment failed. Initiating rollback..."
+
+                def OLD_TARGET = env.ACTIVE_ENV == "blue" ? BLUE_TG : GREEN_TG
+
+                sh """
+                chmod +x scripts/rollback.sh
+                ./scripts/rollback.sh ${OLD_TARGET} ${LISTENER_ARN}
+                """
+
+                echo "Rollback completed"
+            }
         }
     }
 }
